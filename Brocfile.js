@@ -3,7 +3,6 @@
 var uglifyJavaScript = require('broccoli-uglify-js');
 var replace = require('broccoli-replace');
 var compileES6 = require('broccoli-es6-concatenator');
-var validateES6 = require('broccoli-es6-import-validate');
 var pickFiles = require('broccoli-static-compiler');
 var mergeTrees = require('broccoli-merge-trees');
 
@@ -20,7 +19,7 @@ module.exports = function (broccoli) {
   var prefix = 'egc';
   var rootURL = '/';
 
-  // index.html
+  // Index HTML Files
 
   var indexHTML = pickFiles('app', {
     srcDir: '/',
@@ -33,14 +32,29 @@ module.exports = function (broccoli) {
     patterns: [{ match: /\{\{ENV\}\}/g, replacement: getEnvJSON.bind(null, env)}]
   });
 
-  // sourceTrees, appAndDependencies for CSS and JavaScript
+  var indexHTMLs = [indexHTML];
+
+  if (env !== 'production') {
+    var testsIndexHTML = pickFiles('tests', {
+      srcDir: '/',
+      files: ['index.html'],
+      destDir: '/tests'
+    });
+
+    testsIndexHTML = replace(testsIndexHTML, {
+      files: ['tests/index.html'],
+      patterns: [{ match: /\{\{ENV\}\}/g, replacement: getEnvJSON.bind(null, env)}]
+    });
+
+    indexHTMLs.push(testsIndexHTML);
+  }
+
+  // Source Files
 
   var app = pickFiles('app', {
     srcDir: '/',
     destDir: prefix
   });
-
-  app = preprocessTemplates(app);
 
   var config = pickFiles('config', { // Don't pick anything, just watch config folder
     srcDir: '/',
@@ -48,10 +62,37 @@ module.exports = function (broccoli) {
     destDir: '/'
   });
 
-  var sourceTrees = [app, config, 'vendor'].concat(broccoli.bowerTrees());
-  var appAndDependencies = mergeTrees(sourceTrees, { overwrite: true });
+  var sourceFiles = [preprocessTemplates(app), config, 'vendor'];
 
-  // JavaScript
+  if (env !== 'production') {
+    var tests = pickFiles('tests', {
+      srcDir: '/',
+      destDir: prefix + '/tests'
+    });
+
+    sourceFiles.push(preprocessTemplates(tests))
+  }
+
+  sourceFiles = sourceFiles.concat(broccoli.bowerTrees());
+  var appAndDependencies = mergeTrees(sourceFiles, { overwrite: true });
+
+  // Styles
+
+  var styles = [];
+
+  if (env !== 'production') {
+    var qunitStyles = pickFiles('vendor', {
+      srcDir: '/qunit/qunit',
+      files: ['qunit.css'],
+      destDir: '/assets/'
+    });
+
+    styles.push(qunitStyles);
+  }
+
+  // JavaScripts
+
+  var scripts = preprocessJs(appAndDependencies, '/', prefix);
 
   var legacyFilesToAppend = [
     'jquery.js',
@@ -63,14 +104,24 @@ module.exports = function (broccoli) {
     'ember-shim.js'
   ];
 
-  var applicationJs = preprocessJs(appAndDependencies, '/', prefix);
+  var ignoredModules = [
+    'ember/resolver',
+    'ic-ajax'
+  ];
 
-  applicationJs = compileES6(applicationJs, {
+  if (env !== 'production') {
+    legacyFilesToAppend = legacyFilesToAppend.concat([
+      'qunit/qunit/qunit.js',
+      'qunit-shim.js',
+      'ember-qunit/dist/named-amd/main.js'
+    ]);
+
+    ignoredModules.push('ember-qunit');
+  }
+
+  scripts = compileES6(scripts, {
     loaderFile: 'loader/loader.js',
-    ignoredModules: [
-      'ember/resolver',
-      'ic-ajax'
-    ],
+    ignoredModules: ignoredModules,
     inputFiles: [
       prefix + '/**/*.js'
     ],
@@ -80,100 +131,12 @@ module.exports = function (broccoli) {
   });
 
   if (env === 'production') {
-    applicationJs = uglifyJavaScript(applicationJs, {
+    scripts = uglifyJavaScript(scripts, {
       mangle: false,
       compress: false
     });
   }
 
-  // Styles
-
-  var styles = preprocessCss(appAndDependencies, prefix + '/styles', '/assets');
-
-  // Ouput
-
-  var outputTrees = [
-    indexHTML,
-    applicationJs,
-    'public',
-    styles
-  ];
-
-  // Testing
-
-  if (env !== 'production') {
-
-    var tests = pickFiles('tests', {
-      srcDir: '/',
-      destDir: prefix + '/tests'
-    });
-
-    var testsIndexHTML = pickFiles('tests', {
-      srcDir: '/',
-      files: ['index.html'],
-      destDir: '/tests'
-    });
-
-    var qunitStyles = pickFiles('vendor', {
-      srcDir: '/qunit/qunit',
-      files: ['qunit.css'],
-      destDir: '/assets/'
-    });
-
-    testsIndexHTML = replace(testsIndexHTML, {
-      files: ['tests/index.html'],
-      patterns: [{ match: /\{\{ENV\}\}/g, replacement: getEnvJSON.bind(null, env)}]
-    });
-
-    tests = preprocessTemplates(tests);
-
-    sourceTrees = [tests, 'vendor'].concat(broccoli.bowerTrees());
-    appAndDependencies = mergeTrees(sourceTrees, { overwrite: true });
-
-    var testsJs = preprocessJs(appAndDependencies, '/', prefix);
-
-    var validatedJs = validateES6(mergeTrees([app, tests]), {
-      whitelist: {
-        'ember/resolver': ['default'],
-        'ember-qunit': [
-          'globalize',
-          'moduleFor',
-          'moduleForComponent',
-          'moduleForModel',
-          'test',
-          'setResolver'
-        ]
-      }
-    });
-
-    var legacyTestFiles = [
-      'qunit/qunit/qunit.js',
-      'qunit-shim.js',
-      'ember-qunit/dist/named-amd/main.js'
-    ];
-
-    legacyFilesToAppend = legacyFilesToAppend.concat(legacyTestFiles);
-
-    testsJs = compileES6(testsJs, {
-      // Temporary workaround for
-      // https://github.com/joliss/broccoli-es6-concatenator/issues/9
-      loaderFile: '_loader.js',
-      ignoredModules: [
-        'ember/resolver',
-        'ember-qunit'
-      ],
-      inputFiles: [
-        prefix + '/**/*.js'
-      ],
-      legacyFilesToAppend: legacyFilesToAppend,
-
-      wrapInEval: true,
-      outputFile: '/assets/tests.js'
-    });
-
-    var testsTrees = [qunitStyles, testsIndexHTML, validatedJs, testsJs];
-    outputTrees = outputTrees.concat(testsTrees);
-  }
-
-  return mergeTrees(outputTrees, { overwrite: true });
+  var trees = indexHTMLs.concat(sourceFiles, styles, scripts);
+  return mergeTrees(trees, { overwrite: true });
 };
