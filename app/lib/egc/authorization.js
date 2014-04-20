@@ -6,6 +6,7 @@ export default Em.Mixin.create({
   scope: null,
 
   gapiReady: false,
+  apiKeySetOnGapi: false,
   authorized: null,
   accessToken: null,
   _gapi: null,
@@ -17,7 +18,7 @@ export default Em.Mixin.create({
     if (!apiKey) { return; }
 
     gapi.client.setApiKey(apiKey);
-    this.set('_gapi', gapi);
+    this.setProperties({ _gapi: gapi, apiKeySetOnGapi: true });
     Em.run.next(this, function() { this.authorize(true); });
   }.observes('gapiReady').on('init'),
 

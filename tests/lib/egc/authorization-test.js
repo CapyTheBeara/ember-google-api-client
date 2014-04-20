@@ -31,6 +31,7 @@ module("AuthorizationMixin", {
 test("apiKey gets set on the gapi client", function() {
   gapi.client.setApiKey = function(key) { equal(key, '1'); };
   createEgc();
+  ok(egc.get('apiKeySetOnGapi'));
 });
 
 asyncTest("an immediate gapi authorization attempt is made", function() {
