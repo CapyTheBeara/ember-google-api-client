@@ -17,10 +17,10 @@ function createRequestBody(file) {
          closeDelimeter;
 }
 
-function uploadFile(opts) {
-  var version = 'v2',
-      uploadPath, params, fileId, file;
+function uploadFile(file, opts) {
+  var version = 'v2', uploadPath, params;
 
+  if (!file) { throw new Error('A file resource is required.'); }
   if (opts && opts.version) { version = opts.version; }
   uploadPath = '/upload/drive/' + version + '/files';
 
@@ -34,21 +34,10 @@ function uploadFile(opts) {
   };
 
   if (opts) {
-    file = opts.file;
-    fileId = file && file.id;
-
-    if (opts.id || fileId) {
-      Em.warn('2 file IDs were given to #uploadFile: ' + opts.id + ' and ' + fileId, !(opts.id && fileId && opts.id !== fileId));
-
-      params.path += '/' + (fileId || opts.id);
-      params.method = 'PUT';
-    }
-
-    if (file && opts.uploadType !== 'media') {
-      params.body = createRequestBody(file);
-    }
-
-    if (opts.uploadType === 'media' && file) {
+    if (opts.uploadType) { params.params.uploadType = opts.uploadType; }
+    if (opts.contentType) { params.headers['Content-Type'] = opts.contentType; }
+    if (opts.contentLength) { params.headers['Content-Length'] = opts.contentLength; }
+    if (opts.uploadType === 'media') {
       if (file.mimeType) {
         params.headers['Content-Type'] = file.mimeType;
       }
@@ -58,10 +47,15 @@ function uploadFile(opts) {
         params.headers['Content-Length'] = file.content.length;
       }
     }
+  }
 
-    if (opts.uploadType) { params.params.uploadType = opts.uploadType; }
-    if (opts.contentType) { params.headers['Content-Type'] = opts.contentType; }
-    if (opts.contentLength) { params.headers['Content-Length'] = opts.contentLength; }
+  if (file.id) {
+    params.path += '/' + file.id;
+    params.method = 'PUT';
+  }
+
+  if (params.params.uploadType === 'multipart') {
+    params.body = createRequestBody(file);
   }
 
   return new Em.RSVP.Promise(function(resolve, reject) {

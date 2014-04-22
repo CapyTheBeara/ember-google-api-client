@@ -17,17 +17,27 @@ module("uploadFile", {
   }
 });
 
+test("file argument is required", function() {
+  throws(
+    function() { uploadFile(); },
+    Error
+  );
+});
+
+
 test("a Drive API version can be specified", function() {
   gapi.client.request = function(args) {
     equal(args.path, '/upload/drive/v1/files');
 
     return reqObj;
   };
-  uploadFile({ version: 'v1' });
+  uploadFile({}, { version: 'v1' });
 });
 
 test("defaults to multipart POST request)", function() {
   gapi.client.request = function(args) {
+    delete args.body;
+
     deepEqual(args, {
       path: '/upload/drive/v2/files',
       method: 'POST',
@@ -38,7 +48,7 @@ test("defaults to multipart POST request)", function() {
     return reqObj;
   };
 
-  uploadFile();
+  uploadFile({});
 });
 
 test("request body is correct for a mutiplart request", function() {
@@ -61,9 +71,7 @@ test("request body is correct for a mutiplart request", function() {
     return reqObj;
   };
 
-  uploadFile({
-    file: Em.merge(specFile, { content: 'shazam' })
-  });
+  uploadFile( Em.merge(specFile, { content: 'shazam' }) );
 });
 
 test("an id param gets included in the path and method is set to PUT", function() {
@@ -76,21 +84,6 @@ test("an id param gets included in the path and method is set to PUT", function(
 
   uploadFile({ id: '1' });
 });
-
-test("file's id is used if file is given", function() {
-  gapi.client.request = function(args) {
-    equal(args.path, '/upload/drive/v2/files/1');
-    equal(args.method, 'PUT');
-
-    return reqObj;
-  };
-
-  uploadFile({
-    id: '2',
-    file: { id: '1'}
-  });
-});
-
 
 test("a simple media upload can be specified", function() {
   gapi.client.request = function(args) {
@@ -108,10 +101,10 @@ test("a simple media upload can be specified", function() {
     return reqObj;
   };
 
-  uploadFile({
-    file: { id: '1', mimeType: 'image/jpeg', content: 'shazam' },
-    uploadType: 'media'
-  });
+  uploadFile(
+    { id: '1', mimeType: 'image/jpeg', content: 'shazam' },
+    { uploadType: 'media' }
+  );
 });
 
 asyncTest("response is resolved", function() {
@@ -123,23 +116,23 @@ asyncTest("response is resolved", function() {
       };
   };
 
-  uploadFile({ file: file }).then(function(res) {
+  uploadFile(file).then(function(res) {
     start();
     equal(res, file);
   })
 });
 
 asyncTest("error response is rejected", function() {
-  var file = { error: 'nope' };
+  var resp = { error: 'nope' };
   gapi.client.request = function() {
     return {
       execute: function(callback) {
-        return callback(file); }
+        return callback(resp); }
       };
   };
 
-  uploadFile({ file: file }).catch(function(res) {
+  uploadFile({}).catch(function(res) {
     start();
-    equal(res, file);
+    equal(res, resp);
   })
 });
