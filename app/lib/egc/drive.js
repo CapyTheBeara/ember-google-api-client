@@ -1,5 +1,8 @@
+import FilesMixin from 'egc/lib/egc/drive/files';
 
-export default Em.Mixin.create({
+export default Em.Mixin.create(
+  FilesMixin, {
+
   driveVersion: 'v2',
   apiKeySetOnGapi: false,
   driveReady: false,
