@@ -1,4 +1,4 @@
-import ReadyMixin from 'egc/lib/egc/ready';
+import ReadyMixin from 'egc/egc/ready';
 
 var EGC = Em.Object.extend(ReadyMixin),
     egc;

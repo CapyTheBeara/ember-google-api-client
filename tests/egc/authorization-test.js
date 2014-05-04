@@ -1,4 +1,4 @@
-import AuthorizationMixin from 'egc/lib/egc/authorization';
+import AuthorizationMixin from 'egc/egc/authorization';
 
 var EGC = Em.Object.extend(AuthorizationMixin),
     egc, gapi;

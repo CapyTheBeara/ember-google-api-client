@@ -1,142 +1,84 @@
-/* global require, module */
+/* global require, process */
+'use strict';
 
-var uglifyJavaScript = require('broccoli-uglify-js');
-var replace = require('broccoli-replace');
-var compileES6 = require('broccoli-es6-concatenator');
-var pickFiles = require('broccoli-static-compiler');
-var mergeTrees = require('broccoli-merge-trees');
+var name = require('./package.json').name;
+var path = require('path');
+var env = process.env.EMBER_ENV;
+var dist = env === 'dist';
 
-var env = require('broccoli-env').getEnv();
-var getEnvJSON = require('./config/environment');
+var pickFiles   = require('broccoli-static-compiler');
+var compileES6  = require('broccoli-es6-concatenator');
+var findBowerTrees   = require('broccoli-bower');
+var mergeTrees  = require('broccoli-merge-trees');
 
-var p = require('ember-cli/lib/preprocessors');
-var preprocessCss = p.preprocessCss;
-var preprocessTemplates = p.preprocessTemplates;
-var preprocessJs = p.preprocessJs;
+var lib = pickFiles('lib', {
+  srcDir: '/',
+  destDir: name
+});
 
-module.exports = function (broccoli) {
-
-  var prefix = 'egc';
-  var rootURL = '/';
-
-  // Index HTML Files
-
-  var indexHTML = pickFiles('app', {
-    srcDir: '/',
-    files: ['index.html'],
-    destDir: '/'
+if (dist) {
+  var loader = pickFiles('vendor', {
+    srcDir: '/loader',
+    files: ['loader.js'],
+    destDir: '/loader'
   });
 
-  indexHTML = replace(indexHTML, {
-    files: ['index.html'],
-    patterns: [{ match: /\{\{ENV\}\}/g, replacement: getEnvJSON.bind(null, env)}]
+  var scripts = mergeTrees([lib, loader], { overwrite: true });
+
+  var es6 = compileES6(scripts, {
+    loaderFile: 'loader/loader.js',
+    inputFiles: [name + '/**/*.js'],
+    outputFile: '/index.js'
   });
 
-  var indexHTMLs = [indexHTML];
+  return module.exports = es6;
+}
 
-  if (env !== 'production') {
-    var testsIndexHTML = pickFiles('tests', {
-      srcDir: '/',
-      files: ['index.html'],
-      destDir: '/tests'
-    });
+var index = pickFiles('tests', {
+  srcDir: '/',
+  files: ['index.html'],
+  destDir: '/'
+});
 
-    testsIndexHTML = replace(testsIndexHTML, {
-      files: ['tests/index.html'],
-      patterns: [{ match: /\{\{ENV\}\}/g, replacement: getEnvJSON.bind(null, env)}]
-    });
+var tests = pickFiles('tests', {
+  srcDir: '/',
+  destDir: name + '/tests'
+});
 
-    indexHTMLs.push(testsIndexHTML);
-  }
+var sourceFiles = [lib, tests, 'vendor'].concat(findBowerTrees());
+var scripts = mergeTrees(sourceFiles, { overwrite: true });
 
-  // Source Files
+var ignoredModules = [
+  'ember',
+  'ember/resolver',
+  'ic-ajax'
+];
 
-  var app = pickFiles('app', {
-    srcDir: '/',
-    destDir: prefix
-  });
-
-  var config = pickFiles('config', { // Don't pick anything, just watch config folder
-    srcDir: '/',
-    files: [],
-    destDir: '/'
-  });
-
-  var sourceFiles = [preprocessTemplates(app), config, 'vendor'];
-
-  if (env !== 'production') {
-    var tests = pickFiles('tests', {
-      srcDir: '/',
-      destDir: prefix + '/tests'
-    });
-
-    sourceFiles.push(preprocessTemplates(tests))
-  }
-
-  sourceFiles = sourceFiles.concat(broccoli.bowerTrees());
-  var appAndDependencies = mergeTrees(sourceFiles, { overwrite: true });
-
-  // Styles
-
-  var styles = [];
-
-  if (env !== 'production') {
-    var qunitStyles = pickFiles('vendor', {
-      srcDir: '/qunit/qunit',
-      files: ['qunit.css'],
-      destDir: '/assets/'
-    });
-
-    styles.push(qunitStyles);
-  }
-
-  // JavaScripts
-
-  var scripts = preprocessJs(appAndDependencies, '/', prefix);
-
-  var legacyFilesToAppend = [
+var legacyFilesToAppend = [
     'jquery.js',
     'handlebars.js',
     'ember.js',
     'ic-ajax/dist/named-amd/main.js',
     'ember-data.js',
-    'ember-resolver.js',
-    'ember-shim.js'
+    'app-shims.js',
+    'ember-resolver.js'
   ];
 
-  var ignoredModules = [
-    'ember/resolver',
-    'ic-ajax'
-  ];
+var qunit = require('broctree-qunit');
 
-  if (env !== 'production') {
-    legacyFilesToAppend = legacyFilesToAppend.concat([
-      'qunit/qunit/qunit.js',
-      'qunit-shim.js',
-      'ember-qunit/dist/named-amd/main.js'
-    ]);
+var testem = pickFiles('tests', {
+  files: ['testem.js'],
+  srcDir: 'helpers',
+  destDir: '/'
+});
 
-    ignoredModules.push('ember-qunit');
-  }
+var es6 = compileES6(scripts, {
+  loaderFile: 'loader/loader.js',
+  ignoredModules: ignoredModules,
+  inputFiles: [name + '/**/*.js'],
+  wrapInEval: true,
+  outputFile: '/index.js',
+  legacyFilesToAppend: legacyFilesToAppend
+});
 
-  scripts = compileES6(scripts, {
-    loaderFile: 'loader/loader.js',
-    ignoredModules: ignoredModules,
-    inputFiles: [
-      prefix + '/**/*.js'
-    ],
-    legacyFilesToAppend: legacyFilesToAppend,
-    wrapInEval: env !== 'production',
-    outputFile: '/assets/app.js'
-  });
-
-  if (env === 'production') {
-    scripts = uglifyJavaScript(scripts, {
-      mangle: false,
-      compress: false
-    });
-  }
-
-  var trees = indexHTMLs.concat(sourceFiles, styles, scripts);
-  return mergeTrees(trees, { overwrite: true });
-};
+return module.exports = mergeTrees([index, es6, qunit, testem], { overwrite: true});

@@ -1,4 +1,4 @@
-import DriveFilesMixin from 'egc/lib/egc/drive/files';
+import DriveFilesMixin from 'egc/egc/drive/files';
 
 var EGC = Em.Object.extend(DriveFilesMixin),
     egc, gapi;

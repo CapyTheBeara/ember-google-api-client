@@ -1,4 +1,4 @@
-import _ from 'egc/lib/egc';
+import _ from 'egc/egc';
 
 module("EGC", {
   setup: function() {

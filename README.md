@@ -22,21 +22,21 @@ egc.then(function() {
 
 ### Find Files
 
-1. Find all files
+* Find all files
 
 ```javascript
 egc.find()
    .then(function(files) { /* ... */ });
 ```
 
-2. Find a file by id
+* Find a file by id
 
 ```javascript
 egc.find('1234abc')
    .then(function(file) { /* ... */ });
 ```
 
-3. Find using a Google API query
+* Find using a Google API query
 
 ```javascript
 egc.find({ q: "title contains 'awesone sauce'"})

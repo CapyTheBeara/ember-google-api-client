@@ -1,4 +1,4 @@
-import PromisifyMixin from 'egc/lib/egc/promisify';
+import PromisifyMixin from 'egc/egc/promisify';
 
 var EGC = Em.Object.extend(PromisifyMixin),
     egc;

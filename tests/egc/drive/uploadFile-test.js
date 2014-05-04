@@ -1,4 +1,4 @@
-import uploadFile from 'egc/lib/egc/drive/uploadFile';
+import uploadFile from 'egc/egc/drive/uploadFile';
 
 var reqObj = { execute: Em.K },
     gapi;
