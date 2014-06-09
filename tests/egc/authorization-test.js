@@ -35,11 +35,9 @@ test("apiKey gets set on the gapi client", function() {
 });
 
 asyncTest("an immediate gapi authorization attempt is made", function() {
-  stop();
   var params = { client_id: '2', scope: 'foo', immediate: true };
   gapi.auth.authorize = function(p) { deepEqual(p, params); start(); };
   createEgc();
-  start();
 });
 
 test("authorized starts off as null", function() {
@@ -48,7 +46,6 @@ test("authorized starts off as null", function() {
 });
 
 asyncTest("authorized is false if immediate authorization attempt fails", function() {
-  stop();
   gapi.auth.authorize = function(params, callback) {
     callback({ error: 'nope' });
     start();
@@ -57,11 +54,9 @@ asyncTest("authorized is false if immediate authorization attempt fails", functi
   };
 
   createEgc();
-  start();
 });
 
 asyncTest("authorized is true if immediate authorization attempt succeeds", function() {
-  stop();
   gapi.auth.authorize = function(params, callback) {
     callback({});
     equal(egc.get('authorized'), true);
@@ -69,7 +64,6 @@ asyncTest("authorized is true if immediate authorization attempt succeeds", func
   };
 
   createEgc();
-  start();
 });
 
 test("accessToken is set if authorized", function() {
