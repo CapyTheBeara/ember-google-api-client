@@ -28,7 +28,8 @@ if (dist) {
   var es6 = compileES6(scripts, {
     loaderFile: 'loader/loader.js',
     inputFiles: [name + '/**/*.js'],
-    outputFile: '/index.js'
+    outputFile: '/index.js',
+    wrapInEval: false
   });
 
   return module.exports = es6;

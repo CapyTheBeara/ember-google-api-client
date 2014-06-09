@@ -1,9 +1,302 @@
-eval("var define, requireModule, require, requirejs;\n\n(function() {\n  var registry = {}, seen = {}, state = {};\n  var FAILED = false;\n\n  define = function(name, deps, callback) {\n    registry[name] = {\n      deps: deps,\n      callback: callback\n    };\n  };\n\n  function reify(deps, name, seen) {\n    var length = deps.length;\n    var reified = new Array(length);\n    var dep;\n    var exports;\n\n    for (var i = 0, l = length; i < l; i++) {\n      dep = deps[i];\n      if (dep === \'exports\') {\n        exports = reified[i] = seen;\n      } else {\n        reified[i] = require(resolve(dep, name));\n      }\n    }\n\n    return {\n      deps: reified,\n      exports: exports\n    };\n  }\n\n  requirejs = require = requireModule = function(name) {\n    if (state[name] !== FAILED &&\n        seen.hasOwnProperty(name)) {\n      return seen[name];\n    }\n\n    if (!registry[name]) {\n      throw new Error(\'Could not find module \' + name);\n    }\n\n    var mod = registry[name];\n    var reified;\n    var module;\n    var loaded = false;\n\n    seen[name] = { }; // placeholder for run-time cycles\n\n    try {\n      reified = reify(mod.deps, name, seen[name]);\n      module = mod.callback.apply(this, reified.deps);\n      loaded = true;\n    } finally {\n      if (!loaded) {\n        state[name] = FAILED;\n      }\n    }\n\n    return reified.exports ? seen[name] : (seen[name] = module);\n  };\n\n  function resolve(child, name) {\n    if (child.charAt(0) !== \'.\') { return child; }\n\n    var parts = child.split(\'/\');\n    var nameParts = name.split(\'/\');\n    var parentBase;\n\n    if (nameParts.length === 1) {\n      parentBase = nameParts;\n    } else {\n      parentBase = nameParts.slice(0, -1);\n    }\n\n    for (var i = 0, l = parts.length; i < l; i++) {\n      var part = parts[i];\n\n      if (part === \'..\') { parentBase.pop(); }\n      else if (part === \'.\') { continue; }\n      else { parentBase.push(part); }\n    }\n\n    return parentBase.join(\'/\');\n  }\n\n  requirejs.entries = requirejs._eak_seen = registry;\n  requirejs.clear = function(){\n    requirejs.entries = requirejs._eak_seen = registry = {};\n    seen = state = {};\n  };\n})();\n//# sourceURL=loader/loader.js");
-eval("define(\"egc/egc\", \n  [\"egc/egc/ready\",\"egc/egc/authorization\",\"egc/egc/promisify\",\"egc/egc/drive\",\"exports\"],\n  function(__dependency1__, __dependency2__, __dependency3__, __dependency4__, __exports__) {\n    \"use strict\";\n    var ReadyMixin = __dependency1__[\"default\"];\n    var AuthorizationMixin = __dependency2__[\"default\"];\n    var PromisifyMixin = __dependency3__[\"default\"];\n    var DriveMixin = __dependency4__[\"default\"];\n\n    var EGC = Em.Object.extend(\n      ReadyMixin,\n      AuthorizationMixin,\n      PromisifyMixin,\n      DriveMixin, {\n\n      DEBUG: true,\n      getScript: $.getScript\n    });\n\n    Ember.EGC = EGC;\n    __exports__[\"default\"] = EGC;\n  });//# sourceURL=egc/egc.js");
-eval("define(\"egc/egc/ready\", \n  [\"exports\"],\n  function(__exports__) {\n    \"use strict\";\n    __exports__[\"default\"] = Em.Mixin.create({\n      gapiSourceUrl: \'https://apis.google.com/js/client.js?onload=gapiReady\',\n      getScript: null,  // ie. $.getScript if using jQuery\n      gapiReady: false,\n\n      init: function() {\n        this._super();\n        if (window.gapi) { return this.setReady(); }\n        window.gapiReady = this.setReady.bind(this);\n      },\n\n      setReady: function() {\n        this.set(\'gapiReady\', true);\n      },\n\n      fetchGapi: function() {\n        var getScript = this.get(\'getScript\');\n        if (getScript) { getScript(this.get(\'gapiSourceUrl\')); }\n      }.observes(\'getScript\', \'gapiSourceUrl\').on(\'init\')\n    });\n  });//# sourceURL=egc/egc/ready.js");
-eval("define(\"egc/egc/authorization\", \n  [\"exports\"],\n  function(__exports__) {\n    \"use strict\";\n    // TODO - _gapi put in for testing needs to\n    // handle Em.run.next(). Get rid of it.\n    __exports__[\"default\"] = Em.Mixin.create({\n      apiKey: null,\n      clientId: null,\n      scope: null,\n\n      gapiReady: false,\n      apiKeySetOnGapi: false,\n      authorized: null,\n      accessToken: null,\n      _gapi: null,\n\n      setApiKey: function() {\n        if (!this.get(\'gapiReady\')) { return; }\n\n        var apiKey = this.get(\'apiKey\');\n        if (!apiKey) { return; }\n\n        gapi.client.setApiKey(apiKey);\n        this.setProperties({ _gapi: gapi, apiKeySetOnGapi: true });\n        Em.run.next(this, function() { this.authorize(true); });\n      }.observes(\'gapiReady\').on(\'init\'),\n\n      authorize: function(now) {\n        this.get(\'_gapi\').auth.authorize({\n          client_id: this.get(\'clientId\'),\n          scope: this.get(\'scope\'),\n          immediate: now\n        }, this.handlAuthResult.bind(this));\n      },\n\n      handlAuthResult: function(res) {\n        if (res && !res.error) { return this.set(\'authorized\', true); }\n        this.set(\'authorized\', false);\n      },\n\n      setAccessToken: function() {\n        if (!this.get(\'authorized\')) { return; }\n\n        this.set(\'accessToken\', gapi.auth.getToken().access_token);\n      }.observes(\'authorized\'),\n\n    });\n  });//# sourceURL=egc/egc/authorization.js");
-eval("define(\"egc/egc/promisify\", \n  [\"exports\"],\n  function(__exports__) {\n    \"use strict\";\n    var Promise = Em.RSVP.Promise;\n\n    __exports__[\"default\"] = Em.Mixin.create(Em.PromiseProxyMixin, {\n      _authResolveReject: null,\n\n      init: function() {\n        this._super();\n\n        var promise = new Promise(function(resolve, reject) {\n          this.addObserver(\'authorized\', function() {\n            var authorized = this.get(\'authorized\');\n            if (authorized) { resolve(); }\n            if (authorized === false) { reject(); }\n          });\n        }.bind(this));\n\n        this.set(\'promise\', promise);\n      },\n\n    });\n  });//# sourceURL=egc/egc/promisify.js");
-eval("define(\"egc/egc/drive\", \n  [\"egc/egc/drive/files\",\"exports\"],\n  function(__dependency1__, __exports__) {\n    \"use strict\";\n    var FilesMixin = __dependency1__[\"default\"];\n\n    __exports__[\"default\"] = Em.Mixin.create(\n      FilesMixin, {\n\n      driveVersion: \'v2\',\n      apiKeySetOnGapi: false,\n      driveReady: false,\n\n      loadDrive: function() {\n        if (!this.get(\'apiKeySetOnGapi\')) { return; }\n\n        gapi.client.load(\'drive\', this.get(\'driveVersion\'), function() {\n          this.set(\'driveReady\', true);\n        }.bind(this));\n      }.observes(\'apiKeySetOnGapi\')\n\n    });\n  });//# sourceURL=egc/egc/drive.js");
-eval("define(\"egc/egc/drive/files\", \n  [\"egc/egc/utils\",\"egc/egc/drive/uploadFile\",\"exports\"],\n  function(__dependency1__, __dependency2__, __exports__) {\n    \"use strict\";\n    var handleGapiResponse = __dependency1__.handleGapiResponse;\n    var uploadFile = __dependency2__[\"default\"];\n\n    var Promise = Em.RSVP.Promise,\n        a_slice = Array.prototype.slice;\n\n    function extractItems(res) {\n      if (res.items) { return res.items; }\n      return [];\n    }\n\n    // assumes driveReady is true when requests are made\n    __exports__[\"default\"] = Em.Mixin.create({\n      DEBUG: false,\n      driveVersion: \'v2\', // also in DriveMixin\n\n      find: function(args) {\n        var self = this;\n\n        if (!args) {\n          return this.request(\'list\').then(extractItems);\n        }\n\n        if (typeof args === \'string\') {\n          return this.request(\'get\', { fileId: args });\n        }\n\n        if (typeof args === \'object\') {\n          return this.request(\'list\', args).then(extractItems);\n        }\n      },\n\n      insert: function(file) {\n        if (file.content) {\n          var params = {\n            version: this.get(\'driveVersion\'),\n            DEBUG: this.get(\'DEBUG\')\n          };\n          return uploadFile(file, params);\n        }\n\n        if (file.id) { return this.patch(file); }\n        return this.request(\'insert\', { resource: file });\n      },\n\n      update: Em.aliasMethod(\'insert\'),\n\n      patch: function(file) {\n        return this.request(\'patch\', { fileId: file.id, resource: file });\n      },\n\n      // Google\'s gapi client sends a POST request instead of DELETE\n      destroy: function(id) {\n        var path = \'/drive/\' + this.get(\'driveVersion\') + \'/files/\' + id,\n            DEBUG = this.get(\'DEBUG\');\n\n        return new Promise(function(resolve, reject) {\n          gapi.client.request({ path: path, method: \'DELETE\' })\n                     .execute(handleGapiResponse(resolve, reject, DEBUG));\n        });\n      },\n\n      request: function() {\n        var args = a_slice.call(arguments),\n            method = args[0],\n            rest = args.slice(1),\n            DEBUG = this.get(\'DEBUG\');\n\n        return new Promise(function(resolve, reject) {\n          if (DEBUG) { console.log(\'sending gapi request\', args);}\n\n          gapi.client.drive\n              .files[method].apply(null, rest)\n              .execute(handleGapiResponse(resolve, reject, DEBUG));\n        });\n      }\n    });\n  });//# sourceURL=egc/egc/drive/files.js");
-eval("define(\"egc/egc/utils\", \n  [\"exports\"],\n  function(__exports__) {\n    \"use strict\";\n    function handleGapiResponse(resolve, reject, DEBUG) {\n      return function(res) {\n        if (DEBUG) { console.log(\'gapi response\', res); }\n        if (res && res.error) { return Em.run(null, reject, res); }\n        Em.run(null, resolve, res);\n      };\n    }\n\n    __exports__.handleGapiResponse = handleGapiResponse;\n  });//# sourceURL=egc/egc/utils.js");
-eval("define(\"egc/egc/drive/uploadFile\", \n  [\"egc/egc/utils\",\"exports\"],\n  function(__dependency1__, __exports__) {\n    \"use strict\";\n    var handleGapiResponse = __dependency1__.handleGapiResponse;\n\n    var boundary = \'foo_bar_baz\',\n        delimiter = \"\\r\\n--\" + boundary + \"\\r\\n\",\n        closeDelimeter = \"\\r\\n--\" + boundary + \"--\";\n\n    function createRequestBody(file) {\n      var specFile = Em.copy(file);\n      delete specFile.content;\n\n      return delimiter +\n             \'Content-Type: application/json\\r\\n\\r\\n\' +\n             JSON.stringify(specFile) +\n             delimiter +\n             \'Content-Type: \' + file.mimeType + \'\\r\\n\\r\\n\' +\n             file.content +\n             closeDelimeter;\n    }\n\n    function uploadFile(file, opts) {\n      var version = \'v2\', uploadPath, params;\n\n      if (!file) { throw new Error(\'A file resource is required.\'); }\n      if (opts && opts.version) { version = opts.version; }\n      uploadPath = \'/upload/drive/\' + version + \'/files\';\n\n      params = {\n        path: uploadPath,\n        method: \'POST\',\n        params: { uploadType: \'multipart\' },\n        headers: {\n          \'Content-Type\': \'multipart/related; boundary=\"\' + boundary + \'\"\'\n        }\n      };\n\n      if (opts) {\n        if (opts.uploadType) { params.params.uploadType = opts.uploadType; }\n        if (opts.contentType) { params.headers[\'Content-Type\'] = opts.contentType; }\n        if (opts.contentLength) { params.headers[\'Content-Length\'] = opts.contentLength; }\n        if (opts.uploadType === \'media\') {\n          if (file.mimeType) {\n            params.headers[\'Content-Type\'] = file.mimeType;\n          }\n\n          if (file.content) {\n            params.body = file.content;\n            params.headers[\'Content-Length\'] = file.content.length;\n          }\n        }\n      }\n\n      if (file.id) {\n        params.path += \'/\' + file.id;\n        params.method = \'PUT\';\n      }\n\n      if (params.params.uploadType === \'multipart\') {\n        params.body = createRequestBody(file);\n      }\n\n      return new Em.RSVP.Promise(function(resolve, reject) {\n        gapi.client.request(params)\n                   .execute(handleGapiResponse(resolve, reject, (opts && opts.DEBUG)));\n      });\n    };\n\n    __exports__[\"default\"] = uploadFile;\n  });//# sourceURL=egc/egc/drive/uploadFile.js");
+define("egc/egc",
+  ["egc/egc/ready","egc/egc/authorization","egc/egc/drive","exports"],
+  function(__dependency1__, __dependency2__, __dependency3__, __exports__) {
+    "use strict";
+    var ReadyMixin = __dependency1__["default"];
+    var AuthorizationMixin = __dependency2__["default"];
+    var DriveMixin = __dependency3__["default"];
+
+    var EGC = Em.Object.extend(
+      ReadyMixin,
+      AuthorizationMixin,
+      DriveMixin, {
+
+      DEBUG: true,
+      getScript: $.getScript
+    });
+
+    Ember.EGC = EGC;
+    __exports__["default"] = EGC;
+  });define("egc/egc/ready",
+  ["exports"],
+  function(__exports__) {
+    "use strict";
+    __exports__["default"] = Em.Mixin.create({
+      gapiSourceUrl: 'https://apis.google.com/js/client.js?onload=gapiReady',
+      getScript: null,  // ie. $.getScript if using jQuery
+      gapiReady: false,
+
+      init: function() {
+        this._super();
+        if (window.gapi) { return this.setReady(); }
+        window.gapiReady = this.setReady.bind(this);
+      },
+
+      setReady: function() {
+        this.set('gapiReady', true);
+      },
+
+      fetchGapi: function() {
+        var getScript = this.get('getScript');
+        if (getScript) { getScript(this.get('gapiSourceUrl')); }
+      }.observes('getScript', 'gapiSourceUrl').on('init')
+    });
+  });define("egc/egc/authorization",
+  ["exports"],
+  function(__exports__) {
+    "use strict";
+    // TODO - _gapi put in for testing needs to
+    // handle Em.run.next(). Get rid of it.
+
+    var Promise = Em.RSVP.Promise;
+
+    __exports__["default"] = Em.Mixin.create(Em.PromiseProxyMixin, {
+      apiKey: null,
+      clientId: null,
+      scope: null,
+
+      gapiReady: false,
+      apiKeySetOnGapi: false,
+      authorized: null,
+      accessToken: null,
+      _gapi: null,
+
+      init: function() {
+        this._super();
+        this.setPromise();
+      },
+
+      setPromise: function() {
+        var promise = new Promise(function(resolve, reject) {
+          this.addObserver('authorized', function() {
+            var authorized = this.get('authorized');
+            if (authorized) { resolve(); }
+            if (authorized === false) { reject(); }
+          });
+        }.bind(this));
+
+        this.set('promise', promise);
+      },
+
+      setApiKey: function() {
+        if (!this.get('gapiReady')) { return; }
+
+        var apiKey = this.get('apiKey');
+        if (!apiKey) { return; }
+
+        gapi.client.setApiKey(apiKey);
+        this.setProperties({ _gapi: gapi, apiKeySetOnGapi: true });
+        Em.run.next(this, function() { this.authorize(true); });
+      }.observes('gapiReady').on('init'),
+
+      authorize: function(now) {
+        this.get('_gapi').auth.authorize({
+          client_id: this.get('clientId'),
+          scope: this.get('scope'),
+          immediate: now
+        }, this.handlAuthResult.bind(this));
+
+        this.setPromise();
+        return this;
+      },
+
+      handlAuthResult: function(res) {
+        if (res && res.access_token) { return this.set('authorized', true); }
+        this.set('authorized', false);
+      },
+
+      setAccessToken: function() {
+        if (!this.get('authorized')) { return; }
+
+        this.set('accessToken', gapi.auth.getToken().access_token);
+      }.observes('authorized'),
+
+    });
+  });define("egc/egc/drive",
+  ["egc/egc/drive/files","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var FilesMixin = __dependency1__["default"];
+
+    __exports__["default"] = Em.Mixin.create(
+      FilesMixin, {
+
+      driveVersion: 'v2',
+      apiKeySetOnGapi: false,
+      driveReady: false,
+
+      loadDrive: function() {
+        if (!this.get('apiKeySetOnGapi')) { return; }
+
+        gapi.client.load('drive', this.get('driveVersion'), function() {
+          this.set('driveReady', true);
+        }.bind(this));
+      }.observes('apiKeySetOnGapi')
+
+    });
+  });define("egc/egc/drive/files",
+  ["egc/egc/utils","egc/egc/drive/uploadFile","exports"],
+  function(__dependency1__, __dependency2__, __exports__) {
+    "use strict";
+    var handleGapiResponse = __dependency1__.handleGapiResponse;
+    var uploadFile = __dependency2__["default"];
+
+    var Promise = Em.RSVP.Promise,
+        a_slice = Array.prototype.slice;
+
+    function extractItems(res) {
+      if (res.items) { return res.items; }
+      return [];
+    }
+
+    // assumes driveReady is true when requests are made
+    __exports__["default"] = Em.Mixin.create({
+      DEBUG: false,
+      driveVersion: 'v2', // also in DriveMixin
+
+      find: function(args) {
+        var self = this;
+
+        if (!args) {
+          return this.request('list').then(extractItems);
+        }
+
+        if (typeof args === 'string') {
+          return this.request('get', { fileId: args });
+        }
+
+        if (typeof args === 'object') {
+          return this.request('list', args).then(extractItems);
+        }
+      },
+
+      insert: function(file) {
+        if (file.content) {
+          var params = {
+            version: this.get('driveVersion'),
+            DEBUG: this.get('DEBUG')
+          };
+          return uploadFile(file, params);
+        }
+
+        if (file.id) { return this.patch(file); }
+        return this.request('insert', { resource: file });
+      },
+
+      update: Em.aliasMethod('insert'),
+
+      patch: function(file) {
+        return this.request('patch', { fileId: file.id, resource: file });
+      },
+
+      // Google's gapi client sends a POST request instead of DELETE
+      destroy: function(id) {
+        var path = '/drive/' + this.get('driveVersion') + '/files/' + id,
+            DEBUG = this.get('DEBUG');
+
+        return new Promise(function(resolve, reject) {
+          gapi.client.request({ path: path, method: 'DELETE' })
+                     .execute(handleGapiResponse(resolve, reject, DEBUG));
+        });
+      },
+
+      request: function() {
+        var args = a_slice.call(arguments),
+            method = args[0],
+            rest = args.slice(1),
+            DEBUG = this.get('DEBUG');
+
+        return new Promise(function(resolve, reject) {
+          if (DEBUG) { console.log('sending gapi request', args);}
+
+          gapi.client.drive
+              .files[method].apply(null, rest)
+              .execute(handleGapiResponse(resolve, reject, DEBUG));
+        });
+      }
+    });
+  });define("egc/egc/utils",
+  ["exports"],
+  function(__exports__) {
+    "use strict";
+    function handleGapiResponse(resolve, reject, DEBUG) {
+      return function(res) {
+        if (DEBUG) { console.log('gapi response', res); }
+        if (res && res.error) { return Em.run(null, reject, res); }
+        Em.run(null, resolve, res);
+      };
+    }
+
+    __exports__.handleGapiResponse = handleGapiResponse;
+  });define("egc/egc/drive/uploadFile",
+  ["egc/egc/utils","exports"],
+  function(__dependency1__, __exports__) {
+    "use strict";
+    var handleGapiResponse = __dependency1__.handleGapiResponse;
+
+    var boundary = 'foo_bar_baz',
+        delimiter = "\r\n--" + boundary + "\r\n",
+        closeDelimeter = "\r\n--" + boundary + "--";
+
+    function createRequestBody(file) {
+      var specFile = Em.copy(file);
+      delete specFile.content;
+
+      return delimiter +
+             'Content-Type: application/json\r\n\r\n' +
+             JSON.stringify(specFile) +
+             delimiter +
+             'Content-Type: ' + file.mimeType + '\r\n\r\n' +
+             file.content +
+             closeDelimeter;
+    }
+
+    function uploadFile(file, opts) {
+      var version = 'v2', uploadPath, params;
+
+      if (!file) { throw new Error('A file resource is required.'); }
+      if (opts && opts.version) { version = opts.version; }
+      uploadPath = '/upload/drive/' + version + '/files';
+
+      params = {
+        path: uploadPath,
+        method: 'POST',
+        params: { uploadType: 'multipart' },
+        headers: {
+          'Content-Type': 'multipart/related; boundary="' + boundary + '"'
+        }
+      };
+
+      if (opts) {
+        if (opts.uploadType) { params.params.uploadType = opts.uploadType; }
+        if (opts.contentType) { params.headers['Content-Type'] = opts.contentType; }
+        if (opts.contentLength) { params.headers['Content-Length'] = opts.contentLength; }
+        if (opts.uploadType === 'media') {
+          if (file.mimeType) {
+            params.headers['Content-Type'] = file.mimeType;
+          }
+
+          if (file.content) {
+            params.body = file.content;
+            params.headers['Content-Length'] = file.content.length;
+          }
+        }
+      }
+
+      if (file.id) {
+        params.path += '/' + file.id;
+        params.method = 'PUT';
+      }
+
+      if (params.params.uploadType === 'multipart') {
+        params.body = createRequestBody(file);
+      }
+
+      return new Em.RSVP.Promise(function(resolve, reject) {
+        gapi.client.request(params)
+                   .execute(handleGapiResponse(resolve, reject, (opts && opts.DEBUG)));
+      });
+    };
+
+    __exports__["default"] = uploadFile;
+  });
