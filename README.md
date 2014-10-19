@@ -1,4 +1,13 @@
-# Work In Progress
+# Ember-google-api-client - Work In Progress
+
+# Installation
+
+**note: this has not been published yet**
+```
+npm install --save-dev ember-google-api-client
+```
+
+# Usage
 
 ## Initialization
 
@@ -70,3 +79,28 @@ egc.update(file)
 ```javascript
 egc.destroy(file.id);
  ```
+
+# Collaboration
+This section outlines the details of collaborating on this Ember addon.
+
+## Installation
+
+* `git clone` this repository
+* `npm install`
+* `bower install`
+
+## Running
+
+* `ember server`
+* Visit your app at http://localhost:4200.
+
+## Running Tests
+
+* `ember test`
+* `ember test --server`
+
+## Building
+
+* `ember build`
+
+For more information on using ember-cli, visit [http://www.ember-cli.com/](http://www.ember-cli.com/).

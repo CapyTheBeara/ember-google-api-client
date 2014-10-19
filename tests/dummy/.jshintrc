@@ -1,9 +1,10 @@
 {
-  "predef": {
-    "window": true,
-    "console": true,
-    "gapi": true
-  },
+  "predef": [
+    "document",
+    "window",
+    "-Promise",
+    "gapi"
+  ],
   "browser" : true,
   "boss" : true,
   "curly": true,
